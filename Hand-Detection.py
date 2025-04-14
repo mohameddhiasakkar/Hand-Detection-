@@ -1,11 +1,20 @@
 import cv2
 import mediapipe as mp
+from flask import Flask, render_template, jsonify
+import threading
 
+# Initialize Flask app
+app = Flask(__name__)
+
+# Mediapipe hand detection setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
-=cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0)
+
+# Global variable to store action (gesture)
+current_action = ""
 
 def count_fingers(hand_landmarks):
     tips_ids = [4, 8, 12, 16, 20]
@@ -24,35 +33,50 @@ def count_fingers(hand_landmarks):
 
     return fingers.count(1)
 
-while True:
-    ret, frame = cap.read()
-    frame = cv2.flip(frame, 1)  # نقلب الصورة بالعكس
-    h, w, c = frame.shape
+def capture_gesture():
+    global current_action
+    while True:
+        ret, frame = cap.read()
+        frame = cv2.flip(frame, 1)  # Flip the image horizontally
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = hands.process(rgb_frame)
 
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = hands.process(rgb_frame)
+        if result.multi_hand_landmarks:
+            for hand_landmarks in result.multi_hand_landmarks:
+                mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                fingers_up = count_fingers(hand_landmarks)
 
-    if result.multi_hand_landmarks:
-        for hand_landmarks in result.multi_hand_landmarks:
-            mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-            fingers_up = count_fingers(hand_landmarks)
+                if fingers_up == 5:
+                    current_action = "Yes"
+                elif fingers_up == 2:
+                    current_action = "Next"
+                elif fingers_up == 1:
+                    current_action = "Back"
+                else:
+                    current_action = "..."
 
-            if fingers_up == 5:
-                action = "Yes"
-            elif fingers_up == 2:
-                action = "Next"
-            elif fingers_up == 1:
-                action = "Back"
-            else:
-                action = "..."
+        cv2.imshow("Hand Gesture Control", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-            cv2.putText(frame, action, (10, 70), cv2.FONT_HERSHEY_SIMPLEX,
-                        2, (0, 255, 0), 3)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    cv2.imshow("Hand Gesture Control", frame)
+@app.route('/gesture')
+def get_gesture():
+    # Return the current gesture to the frontend
+    return jsonify({'action': current_action})
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+def run_flask():
+    app.run(debug=True, use_reloader=False)
+
+# Run Flask in a separate thread so it can handle HTTP requests while OpenCV runs
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.start()
+
+# Start the hand gesture capture
+capture_gesture()
 
 cap.release()
 cv2.destroyAllWindows()
