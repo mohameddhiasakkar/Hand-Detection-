@@ -3,17 +3,14 @@ import mediapipe as mp
 from flask import Flask, render_template, jsonify
 import threading
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Mediapipe hand detection setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
 cap = cv2.VideoCapture(0)
 
-# Global variable to store action (gesture)
 current_action = ""
 
 def count_fingers(hand_landmarks):
@@ -37,7 +34,7 @@ def capture_gesture():
     global current_action
     while True:
         ret, frame = cap.read()
-        frame = cv2.flip(frame, 1)  # Flip the image horizontally
+        frame = cv2.flip(frame, 1)  
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = hands.process(rgb_frame)
 
@@ -65,13 +62,11 @@ def index():
 
 @app.route('/gesture')
 def get_gesture():
-    # Return the current gesture to the frontend
     return jsonify({'action': current_action})
 
 def run_flask():
     app.run(debug=True, use_reloader=False)
 
-# Run Flask in a separate thread so it can handle HTTP requests while OpenCV runs
 flask_thread = threading.Thread(target=run_flask)
 flask_thread.start()
 
